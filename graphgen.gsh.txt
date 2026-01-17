@@ -25,7 +25,7 @@ om = new com.fasterxml.jackson.databind.ObjectMapper();
 
 json = om.readTree(doc);
 
-htmlStr = json[0].menuItems[0].rawHtml.asText();
+htmlStr = json["hydra:member"][0].menuItems[0].rawHtml.asText();
 
 html = org.jsoup.Jsoup.parse(htmlStr)
 
@@ -59,38 +59,67 @@ result = '''
 <meta charset="UTF-8">
 <title>Power Schedule</title>
 <style>
-body { font-family: Arial, sans-serif; }
-.row { display: flex; align-items: center; margin-bottom: 6px; }
-.label { width: 70px; font-weight: bold; }
+body {
+  font-family: Arial, sans-serif;
+  background-color: #121212;
+  color: #e0e0e0;
+}
+
+/* rows */
+.row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+/* group label */
+.label {
+  width: 70px;
+  font-weight: bold;
+  color: #f0f0f0;
+}
+
+/* timeline */
 .timeline {
   position: relative;
   height: 20px;
   width: 1440px;
-  background: #2ecc71;
+  background: #00E000;   /* dark green (power ON) */
+  border-radius: 2px;
 }
+
+/* power OFF */
 .off {
   position: absolute;
   top: 0;
   height: 100%;
-  background: #e74c3c;
+  background: #E00000;   /* dark red */
 }
+
+/* hours header */
 .hours {
   display: flex;
   font-size: 10px;
   flex-shrink: 0;
 }
+
+/* first spacer column */
 .hours div:first-child {
   width: 70px;
+  background: transparent;
 }
+
+/* hour cells */
 .hours div {
   width: 60px;
   text-align: center;
-  border: 0;
-}
-.hours div:first-child {
-  background: transparent; /* label spacer */
+  color: #000000;
+  font-weight: bold;
+  box-sizing: border-box;
+  border-right: 1px solid #333;
 }
 
+/* alternating hour background */
 .hours div:nth-child(2n) {
   background-color: lightblue;
 }
@@ -99,19 +128,21 @@ body { font-family: Arial, sans-serif; }
   background-color: yellow;
 }
 </style>
+
 </head>
 <body>
 
-<h3>'''
-result+=input[0]+'. '+input[1]+'</h3><div class="hours"><div></div>';
+<h3>ЛьвівОблЕнерго: '''
+result+=input[0]+'. '+input[1]+'</h3>';
 
-(0..23).each { h ->
-    result+=String.format('<div>%02d:00</div>%n', h)
-}
-
-result+= '</div>\n'
 
 groups.each { g ->
+	result+='<div class="hours"><div></div>';
+	(0..23).each { h ->
+	    result+=String.format('<div>%02d:00</div>%n', h)
+	}
+	result+= '</div>\n'
+
     result+= "<div class='row'>"
     result+= "<div class='label'>${g.name}</div>"
     result+= "<div class='timeline'>"
