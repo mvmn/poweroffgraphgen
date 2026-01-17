@@ -1,0 +1,130 @@
+groovy.grape.Grape.grab(["groupId":"org.jsoup", "artifactId":"jsoup", "version":"1.7.2"]);
+
+groovy.grape.Grape.grab(["groupId":"commons-io", "artifactId":"commons-io", "version":"2.4"]);
+groovy.grape.Grape.grab([group:'org.apache.commons', module:'commons-lang3', version:'3.16.0'])
+groovy.grape.Grape.grab(["groupId":"org.apache.httpcomponents", "artifactId":"httpclient", "version":"4.3.2"]);
+groovy.grape.Grape.grab([group: 'com.fasterxml.jackson.core', module: 'jackson-databind', version: '2.17.2'])
+
+hccm = new org.apache.http.impl.conn.PoolingHttpClientConnectionManager(); hccm.setMaxTotal(1000); hccm.setDefaultMaxPerRoute(100);
+hc = org.apache.http.impl.client.HttpClients.custom().setConnectionManager(hccm).build();
+
+get = { url ->
+  try { println "HTTP GET "+url; response = hc.execute(new org.apache.http.client.methods.HttpGet(url));
+    try { entity = response.entity; encoding = "UTF-8";
+      if(entity.contentType!=null && entity.contentType.value.contains("charset=")) {
+        encoding = entity.contentType.value.split("=")[1]; println " -- Charset: "+encoding;
+      }
+      result = new String(entity.content.bytes, encoding);
+      return result;
+    } finally { response.close(); }
+  } catch(Exception e) { e.printStackTrace(); }
+}
+
+doc = get("https://api.loe.lviv.ua/api/menus?page=1&type=photo-grafic")
+om = new com.fasterxml.jackson.databind.ObjectMapper();
+
+json = om.readTree(doc);
+
+htmlStr = json[0].menuItems[0].rawHtml.asText();
+
+html = org.jsoup.Jsoup.parse(htmlStr)
+
+toMinutes = { t ->
+    def (h, m) = t.split(':')*.toInteger()
+    h * 60 + m
+}
+
+groups = []
+
+input = html.select("p").collect{ it.text() };
+
+input.each{ line ->
+    if (!line.startsWith("Група")) return
+
+    name = line.find(/Група\s+([\d.]+)/) { it[1] }
+    ranges = []
+
+    line.findAll(/з\s+(\d\d:\d\d)\s+до\s+(\d\d:\d\d)/) {
+        ranges << [toMinutes(it[1]), toMinutes(it[2])]
+    }
+
+    groups << [name: name, off: ranges]
+}
+
+
+result = '''
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Power Schedule</title>
+<style>
+body { font-family: Arial, sans-serif; }
+.row { display: flex; align-items: center; margin-bottom: 6px; }
+.label { width: 70px; font-weight: bold; }
+.timeline {
+  position: relative;
+  height: 20px;
+  width: 1440px;
+  background: #2ecc71;
+}
+.off {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: #e74c3c;
+}
+.hours {
+  display: flex;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+.hours div:first-child {
+  width: 70px;
+}
+.hours div {
+  width: 60px;
+  text-align: center;
+  border: 0;
+}
+.hours div:first-child {
+  background: transparent; /* label spacer */
+}
+
+.hours div:nth-child(2n) {
+  background-color: lightblue;
+}
+
+.hours div:nth-child(2n+1):not(:first-child) {
+  background-color: yellow;
+}
+</style>
+</head>
+<body>
+
+<h3>'''
+result+=input[0]+'. '+input[1]+'</h3><div class="hours"><div></div>';
+
+(0..23).each { h ->
+    result+=String.format('<div>%02d:00</div>%n', h)
+}
+
+result+= '</div>\n'
+
+groups.each { g ->
+    result+= "<div class='row'>"
+    result+= "<div class='label'>${g.name}</div>"
+    result+= "<div class='timeline'>"
+    g.off.each { r ->
+        result+= "<div class='off' style='left:${r[0]}px;width:${r[1]-r[0]}px'></div>"
+    }
+    result+= '</div></div>'
+}
+
+result+= '''
+</body>
+</html>
+'''
+
+new File("powergraph.html").text = result
+
