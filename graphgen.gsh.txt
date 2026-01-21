@@ -20,12 +20,7 @@ get = { url ->
   } catch(Exception e) { e.printStackTrace(); }
 }
 
-doc = get("https://api.loe.lviv.ua/api/menus?page=1&type=photo-grafic")
-om = new com.fasterxml.jackson.databind.ObjectMapper();
-
-json = om.readTree(doc);
-
-htmlStr = json["hydra:member"][0].menuItems[0].rawHtml.asText();
+genPage = {htmlStr->
 
 html = org.jsoup.Jsoup.parse(htmlStr)
 
@@ -83,9 +78,9 @@ body {
 .timeline {
   position: relative;
   height: 20px;
-  width: 1440px;
+  min-width: 1440px;
   background: #00E000;   /* dark green (power ON) */
-  border-radius: 2px;
+  border: 0;
 }
 
 /* power OFF */
@@ -131,17 +126,18 @@ body {
 
 </head>
 <body>
+<div class="scroll-x">
 
-<h3>ЛьвівОблЕнерго: '''
+<h3>На основі даних ЛьвівОблЕнерго poweron.loe.lviv.ua : '''
 result+=input[0]+'. '+input[1]+'</h3>';
 
 
 groups.each { g ->
-	result+='<div class="hours"><div></div>';
-	(0..23).each { h ->
-	    result+=String.format('<div>%02d:00</div>%n', h)
-	}
-	result+= '</div>\n'
+  result+='<div class="hours"><div></div>';
+  (0..23).each { h ->
+      result+=String.format('<div>%02d:00</div>%n', h)
+  }
+  result+= '</div>\n'
 
     result+= "<div class='row'>"
     result+= "<div class='label'>${g.name}</div>"
@@ -152,10 +148,29 @@ groups.each { g ->
     result+= '</div></div>'
 }
 
-result+= '''
+result+= '''</div>
 </body>
 </html>
 '''
+return result;
+}
 
-new File("powergraph.html").text = result
+process = {
+doc = get("https://api.loe.lviv.ua/api/menus?page=1&type=photo-grafic")
+om = new com.fasterxml.jackson.databind.ObjectMapper();
 
+json = om.readTree(doc);
+
+dataContainer = null
+if(json.getNodeType() == com.fasterxml.jackson.databind.node.JsonNodeType.ARRAY) {
+  dataContainer = json[0].menuItems;
+} else {
+  dataContainer = json["hydra:member"][0].menuItems;
+}
+
+new File("powergraph.html").text = genPage(dataContainer.first().rawHtml.asText())
+new File("powergraph_tomorrow.html").text = genPage(dataContainer.last().rawHtml.asText())
+
+}
+
+process();
